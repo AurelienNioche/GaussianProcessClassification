@@ -3,52 +3,74 @@ import seaborn as sns
 
 import numpy as np
 import scipy
+import math
 
 from tqdm.autonotebook import tqdm
 
-import warnings
-
 import torch
 import torch.distributions as dist
-from torch import nn
+from torch.nn import Module
+
+import gpytorch
+from gpytorch.models import ApproximateGP
+from gpytorch.variational import CholeskyVariationalDistribution
+from gpytorch.variational import VariationalStrategy
+from gpytorch.mlls import VariationalELBO
+from gpytorch.utils.quadrature import GaussHermiteQuadrature1D
+from gpytorch.likelihoods.likelihood import _OneDimensionalLikelihood
 
 from pymc3.gp.util import plot_gp_dist
-
-from gp.likelihood import BernoulliLikelihood
-from gp.loss import VariationalELBO
-from gp.cholesky_variational_distribution import CholeskyVariationalDistribution
-from gp.variational_strategy import VariationalStrategy
-from gp.kernel import ScaledRBFKernel
-from gp.mean import ZeroMean
 
 sns.set()
 
 
-class GPClassificationModel(nn.Module):
-    def __init__(self, inducing_points):
+class BernoulliLikelihood(_OneDimensionalLikelihood):
+    
+    r"""
+    Close to `~gpytorch.likelihoods.BernoulliLikelihood` but using the inverse-logit function instead of 
+    the standard Normal CDF as activation function for the latent process.
+    """
+    
+    def __init__(self):
         super().__init__()
-        variational_distribution = CholeskyVariationalDistribution(inducing_points.size(0))
-        self.variational_strategy = VariationalStrategy(
-            self, inducing_points, variational_distribution,
-            learn_inducing_locations=True)
+        self.quadrature = GaussHermiteQuadrature1D()
 
-        self.mean_module = ZeroMean()
-        self.covar_module = ScaledRBFKernel()
+    def forward(self, function_samples, **kwargs):
+        raise NotImplementedError
+
+    def log_marginal(self,  *args, **kwargs):
+        raise NotImplementedError
+
+    def marginal(self, function_dist, **kwargs):
+        raise NotImplementedError
+
+    def expected_log_prob(self, observations, function_dist, n_sample=40, *params, **kwargs):
+        
+        def log_prob_lambda(function_samples): 
+            return dist.Bernoulli(logits=function_samples).log_prob(observations)
+        
+        log_prob = self.quadrature(log_prob_lambda, function_dist)
+        return log_prob
+
+
+class GPClassificationModel(ApproximateGP):
+    def __init__(self, inducing_points):
+        variational_distribution = CholeskyVariationalDistribution(inducing_points.size(0))
+        variational_strategy = VariationalStrategy(
+            self, inducing_points, variational_distribution, learn_inducing_locations=True
+        )
+        super(GPClassificationModel, self).__init__(variational_strategy)
+        self.mean_module = gpytorch.means.ZeroMean()
+        self.covar_module = gpytorch.kernels.ScaleKernel(gpytorch.kernels.RBFKernel())
+        
+        self.quadrature = GaussHermiteQuadrature1D()
 
     def forward(self, x):
-
-        x = x.squeeze(-1)
-
         mean_x = self.mean_module(x)
         covar_x = self.covar_module(x)
 
-        latent_pred = dist.MultivariateNormal(mean_x, covar_x, validate_args=False)
+        latent_pred = gpytorch.distributions.MultivariateNormal(mean_x, covar_x)
         return latent_pred
-
-    def __call__(self, inputs):
-        if inputs.dim() == 1:
-            inputs = inputs.unsqueeze(-1)
-        return self.variational_strategy(inputs)
 
 
 def true_f(x):
@@ -131,7 +153,7 @@ def main():
     # for i in range(10):
     #     ax.plot(test_x, pred[i])
     # plt.show()
-
+    
 
 if __name__ == "__main__":
     main()
