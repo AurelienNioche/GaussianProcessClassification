@@ -62,12 +62,15 @@ def main():
     x = np.sort(np.random.uniform(0, 1, n))
     f = true_f(x)
     y = scipy.stats.bernoulli.rvs(scipy.special.expit(f))
-
+    
+    ## Uncomment to show raw data
     # plt.scatter(x, y, alpha=0.5)
     # plt.xlabel('$x$')
     # plt.ylabel('$y$')
     # plt.yticks([0, 1])
+    # plt.show()
 
+    ## Uncomment to show logits ("f")
     # fig, ax = plt.subplots()
     # x_plot = np.linspace(0, 1, 100)
     # ax.plot(x_plot, true_f(x_plot), alpha=0.5)
@@ -75,22 +78,16 @@ def main():
 
     train_x = torch.from_numpy(x.astype(np.float32))
     train_y = torch.from_numpy(y.astype(np.float32))
-
+    
+    # Set initial inducing points
     inducing_points = torch.rand(50)
 
     # Initialize model and likelihood
     model = GPClassificationModel(inducing_points=inducing_points)
     likelihood = BernoulliLikelihood()
-
+    
+    # Set number of epochs
     training_iter = 1000
-
-    # Find optimal model hyperparameters
-    # model.train()
-
-    # print()
-    # for k, v in model.named_parameters():
-    #     print(k, v.shape)
-    # print()
 
     # Use the adam optimizer
     optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
@@ -101,7 +98,7 @@ def main():
     iterator = tqdm(range(training_iter))
 
     for _ in iterator:
-        # print("____", _)
+
         # Zero backpropped gradients from previous iteration
         optimizer.zero_grad()
         # Get predictive output
@@ -113,20 +110,22 @@ def main():
         optimizer.step()
 
         iterator.set_postfix(loss=loss.item())
-
+    
+    # Show results
     test_x = torch.linspace(0, 1, 101)
     f_preds = model(test_x)
 
     pred = f_preds.sample(torch.Size((1000,))).numpy()
 
-    # fig, ax = plt.subplots()
-    # for i in range(10):
-    #     ax.plot(test_x, pred[i])
-
     fig, ax = plt.subplots()
     plot_gp_dist(ax, pred, test_x)
     ax.plot(test_x, true_f(test_x), alpha=0.5)
     plt.show()
+    
+    ## Uncomments to show only a few samples
+    # fig, ax = plt.subplots()
+    # for i in range(10):
+    #     ax.plot(test_x, pred[i])
 
 
 if __name__ == "__main__":
