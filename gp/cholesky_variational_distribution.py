@@ -5,7 +5,7 @@ from torch import distributions as dist
 
 class CholeskyVariationalDistribution(nn.Module):
     """
-    A :obj:`~gpytorch.variational._VariationalDistribution` that is defined to be a multivariate normal distribution
+    A variational distribution that is defined to be a multivariate normal distribution
     with a full covariance matrix.
 
     The most common way this distribution is defined is to parameterize it in terms of a mean vector and a covariance
@@ -14,17 +14,12 @@ class CholeskyVariationalDistribution(nn.Module):
 
     :param int num_inducing_points: Size of the variational distribution. This implies that the variational mean
         should be this size, and the variational covariance matrix should have this many rows and columns.
-    :param batch_shape: Specifies an optional batch size
-        for the variational parameters. This is useful for example when doing additive variational inference.
-    :type batch_shape: :obj:`torch.Size`, optional
     :param float mean_init_std: (Default: 1e-3) Standard deviation of gaussian noise to add to the mean initialization.
     """
 
     def __init__(self, num_inducing_points, mean_init_std=1e-3):
 
         super().__init__()
-
-        self.batch_shape = torch.Size([])
 
         self.num_inducing_points = num_inducing_points
         self.mean_init_std = mean_init_std
@@ -36,10 +31,6 @@ class CholeskyVariationalDistribution(nn.Module):
         self.chol_variational_covar = nn.Parameter(covar_init)
 
     @property
-    def device(self):
-        return next(self.parameters()).device
-
-    @property
     def dtype(self):
         return next(self.parameters()).dtype
 
@@ -48,13 +39,10 @@ class CholeskyVariationalDistribution(nn.Module):
         chol_variational_covar = self.chol_variational_covar.mul(mask)
         variational_covar = chol_variational_covar@chol_variational_covar.T
         return dist.MultivariateNormal(self.variational_mean, variational_covar)
-
+    
+    @property
     def shape(self) -> torch.Size:
-        r"""
-        Event + batch shape of VariationalDistribution object
-        :rtype: torch.Size
-        """
-        return torch.Size([*self.batch_shape, self.num_inducing_points])
+        return torch.Size([self.num_inducing_points])
 
     def initialize_variational_distribution(self, prior_dist):
         self.variational_mean.data.copy_(prior_dist.mean)

@@ -11,7 +11,7 @@ class VariationalStrategy(nn.Module):
                  learn_inducing_locations=True):
         super().__init__()
 
-        # Model
+        # GP model
         self.model = model
 
         # Inducing points
@@ -39,8 +39,7 @@ class VariationalStrategy(nn.Module):
             isnan = torch.isnan(A)
             if isnan.any():
                 raise ValueError(
-                    f"cholesky_cpu: {isnan.sum().item()} of {A.numel()} elements of the {A.shape} tensor are NaN."
-                )
+                    f"cholesky_cpu: {isnan.sum().item()} of {A.numel()} elements of the {A.shape} tensor are NaN.")
 
             success = False
             Aprime = A.clone()
@@ -61,27 +60,23 @@ class VariationalStrategy(nn.Module):
             if not success:
                 raise ValueError(
                     f"Matrix not positive definite after repeatedly adding jitter up to {jitter_new:.1e}. "
-                    f"Original error on first attempt: {e}"
-                )
+                    f"Original error on first attempt: {e}")
 
         return L
 
     @property
     def prior_distribution(self):
 
-        shape = self._variational_distribution.shape()
-        zeros = torch.zeros(
-            shape, dtype=self._variational_distribution.dtype)
+        shape = self._variational_distribution.shape
+        dtype = self._variational_distribution.dtype
+        zeros = torch.zeros(shape, dtype=dtype)
         return dist.MultivariateNormal(zeros, torch.eye(shape[0]))
 
     def kl_divergence(self):
         r"""
         Compute the KL divergence between the variational inducing distribution :math:`q(\mathbf u)`
         and the prior inducing distribution :math:`p(\mathbf u)`.
-
-        :rtype: torch.Tensor
         """
-
         return torch.distributions.kl.kl_divergence(self._variational_distribution(),
                                                     self.prior_distribution)
 
